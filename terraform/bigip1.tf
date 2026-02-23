@@ -5,51 +5,53 @@
 #########################################################################
 
 # Generate cloud-init script for BIG-IP
-data "template_file" "bigip1_onboard" {
-  template = file("${path.module}/templates/f5_onboard_3nic_custom.tmpl")
-  vars = {
-    bigip_hostname = var.bigip_netcfg["bigip1"]["hostname"]
-    bigip_username = var.bigip_admin
-    bigip_password = local.random_password
+locals {
+  bigip1_onboard = templatefile(
+    "${path.module}/templates/f5_onboard_3nic_custom.tmpl",
+    {
+      bigip_hostname = var.bigip_netcfg["bigip1"]["hostname"]
+      bigip_username = var.bigip_admin
+      bigip_password = local.random_password
 
-    # Device Group
-    cluster_primary_ip   = local.cluster_primary_ip
-    cluster_secondary_ip = local.cluster_secondary_ip
-    remote_index         = local.bigip1_remote_index
+      # Device Group
+      cluster_primary_ip   = local.cluster_primary_ip
+      cluster_secondary_ip = local.cluster_secondary_ip
+      remote_index         = local.bigip1_remote_index
 
-    # Self IPs
-    # - External self IP - Retrieved from AWS metadata service by F5 Runtime Init
-    # - Internal self IP - Retrieved from AWS metadata service by F5 Runtime Init
+      # Self IPs
+      # - External self IP - Retrieved from AWS metadata service by F5 Runtime Init
+      # - Internal self IP - Retrieved from AWS metadata service by F5 Runtime Init
 
-    # Default Route
-    # - Default gateway on external subnet - Retrieved from AWS metadata service by F5 Runtime Init
+      # Default Route
+      # - Default gateway on external subnet - Retrieved from AWS metadata service by F5 Runtime Init
 
-    # Static Route(s)
-    app_route = var.vpc_cidrs["app"]["vpc"]
-    # - Next hop gateway to app servers via internal subnet+AWS transit gateway - Retrieved from AWS metadata service by F5 Runtime Init
+      # Static Route(s)
+      app_route = var.vpc_cidrs["app"]["vpc"]
+      # - Next hop gateway to app servers via internal subnet+AWS transit gateway - Retrieved from AWS metadata service by F5 Runtime Init
 
-    # BIG-IP Runtime Init package URL
-    INIT_URL = var.INIT_URL
+      # BIG-IP Runtime Init package URL
+      INIT_URL = var.INIT_URL
 
-    # F5 ATC package URLs and Versions
-    DO_URL   = var.DO_URL
-    DO_VER   = var.DO_VER
-    AS3_URL  = var.AS3_URL
-    AS3_VER  = var.AS3_VER
-    TS_URL   = var.TS_URL
-    TS_VER   = var.TS_VER
-    CFE_URL  = var.CFE_URL
-    CFE_VER  = var.CFE_VER
-    FAST_URL = var.FAST_URL
-    FAST_VER = var.FAST_VER
-  }
+      # F5 ATC package URLs and Versions
+      DO_URL   = var.DO_URL
+      DO_VER   = var.DO_VER
+      AS3_URL  = var.AS3_URL
+      AS3_VER  = var.AS3_VER
+      TS_URL   = var.TS_URL
+      TS_VER   = var.TS_VER
+      CFE_URL  = var.CFE_URL
+      CFE_VER  = var.CFE_VER
+      FAST_URL = var.FAST_URL
+      FAST_VER = var.FAST_VER
+    }
+  )
 }
 
 # [Optional] Store local copy of the BIP-IP Runtime Init config
 resource "local_file" "bigip1_f5_onboard" {
   # Set count=0 to disable
   count    = 1
-  content  = data.template_file.bigip1_onboard.rendered
+  content  = local.bigip1_onboard
   filename = "${path.module}/bigip1_f5_onboard.rendered"
 }
 
@@ -75,7 +77,7 @@ resource "aws_instance" "bigip1" {
     device_index         = 2
   }
 
-  user_data                   = data.template_file.bigip1_onboard.rendered
+  user_data                   = local.bigip1_onboard
   user_data_replace_on_change = true
 
   tags = {

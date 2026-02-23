@@ -2,7 +2,7 @@
 # group ACLs to restrict access to the lab resources.
 
 data "http" "myip" {
-  url = "https://ifconfig.me/ip"
+  url = "https://ipinfo.io/ip"
 }
 
 output "jumphost_ip" {
