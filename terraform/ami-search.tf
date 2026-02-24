@@ -7,13 +7,13 @@ data "aws_ami" "bigip" {
     values = [var.f5_ami_search_name]
   }
 
-  owners = ["679593333241"]  # ← F5Networks AWS Marketplace account ID [web:151]
+  owners = ["679593333241"] # ← F5Networks AWS Marketplace account ID [web:151]
 }
 
 data "aws_ami" "linux" {
   most_recent = true
 
-  owners = ["amazon"]  # ← ADD THIS (Amazon Linux)
+  owners = ["amazon"] # ← ADD THIS (Amazon Linux)
 
   filter {
     name   = "name"

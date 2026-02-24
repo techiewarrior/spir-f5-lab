@@ -1,6 +1,10 @@
 # Deploy PAYG BIG-IP 3-NIC VE instance
-# This is BIG-IP #1 - Availability Zone 1
 
+#########################################################################
+# This is BIG-IP #1 - Availability Zone 1
+#########################################################################
+
+# Generate cloud-init script for BIG-IP
 locals {
   bigip1_onboard = templatefile(
     "${path.module}/templates/f5_onboard_3nic_custom.tmpl",
@@ -43,13 +47,47 @@ locals {
   )
 }
 
+# [Optional] Store local copy of the BIP-IP Runtime Init config
 resource "local_file" "bigip1_f5_onboard" {
+  # Set count=0 to disable
   count    = 1
   content  = local.bigip1_onboard
   filename = "${path.module}/bigip1_f5_onboard.rendered"
 }
 
-# Network interfaces (UNCHANGED)
+# Create BIG-IP instance
+resource "aws_instance" "bigip1" {
+
+  ami                  = data.aws_ami.bigip.id
+  instance_type        = var.bigip_instance_type
+  key_name             = aws_key_pair.generated_key.key_name
+  iam_instance_profile = aws_iam_instance_profile.f5_cloud_failover_profile.name
+
+  # Network interfaces
+  network_interface {
+    network_interface_id = aws_network_interface.bigip1_mgmt.id
+    device_index         = 0
+  }
+  network_interface {
+    network_interface_id = aws_network_interface.bigip1_external.id
+    device_index         = 1
+  }
+  network_interface {
+    network_interface_id = aws_network_interface.bigip1_internal.id
+    device_index         = 2
+  }
+
+  user_data                   = local.bigip1_onboard
+  user_data_replace_on_change = true
+
+  tags = {
+    Name     = format("%s_%s", var.prefix, var.bigip_netcfg["bigip1"]["tag"])
+    hostname = var.bigip_netcfg["bigip1"]["hostname"]
+    Owner    = var.emailid
+  }
+
+}
+
 resource "aws_network_interface" "bigip1_mgmt" {
   description     = "NIC for BIG-IP management interface"
   subnet_id       = aws_subnet.hub_bigip1_mgmt.id
@@ -104,13 +142,15 @@ resource "aws_eip" "bigip1_mgmt" {
     Owner = var.emailid
   }
 }
-# NEW: Network interface ATTACHMENTS (add these)
-resource "aws_network_interface_attachment" "bigip1_mgmt" {
+
+# NEW: Explicit attachment for PRIMARY interface (mgmt, device_index 0)
+resource "aws_network_interface_attachment" "bigip1_primary" {
   instance_id          = aws_instance.bigip1.id
   network_interface_id = aws_network_interface.bigip1_mgmt.id
   device_index         = 0
 }
 
+# NEW: Explicit attachment for SECONDARY interfaces
 resource "aws_network_interface_attachment" "bigip1_external" {
   instance_id          = aws_instance.bigip1.id
   network_interface_id = aws_network_interface.bigip1_external.id
@@ -123,16 +163,17 @@ resource "aws_network_interface_attachment" "bigip1_internal" {
   device_index         = 2
 }
 
-# FIXED SINGLE aws_instance (REPLACE the old one completely)
+# FIXED: aws_instance with primary_network_interface_id
 resource "aws_instance" "bigip1" {
-  subnet_id            = aws_subnet.hub_bigip1_mgmt.id # Primary mgmt subnet
   ami                  = data.aws_ami.bigip.id
   instance_type        = var.bigip_instance_type
   key_name             = aws_key_pair.generated_key.key_name
   iam_instance_profile = aws_iam_instance_profile.f5_cloud_failover_profile.name
 
-  # NEW: Primary NIC (mgmt interface)
-  # primary_network_interface_id = aws_network_interface_attachment.bigip1_mgmt.id
+  # FIXED: Primary interface reference (formerly network_interface block)
+  primary_network_interface_id = aws_network_interface_attachment.bigip1_primary.id  # ← NEW
+
+  # REMOVED: All network_interface {} blocks
 
   user_data                   = local.bigip1_onboard
   user_data_replace_on_change = true
@@ -143,13 +184,14 @@ resource "aws_instance" "bigip1" {
     Owner    = var.emailid
   }
 
-  # NEW: Ensure attachments complete first
-  # depends_on = [
-  #   aws_network_interface_attachment.bigip1_mgmt,
-  #   aws_network_interface_attachment.bigip1_external,
-  #   aws_network_interface_attachment.bigip1_internal
-  # ]
+  # Ensure attachments happen BEFORE instance creation
+  depends_on = [
+    aws_network_interface_attachment.bigip1_primary,
+    aws_network_interface_attachment.bigip1_external,
+    aws_network_interface_attachment.bigip1_internal
+  ]
 }
+
 
 # Outputs
 output "bigip1_username" {

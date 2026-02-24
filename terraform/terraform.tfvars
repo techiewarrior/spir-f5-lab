@@ -86,3 +86,6 @@ as3_configs = [
 
 # terraform.tfvars
 
+AWS_CONSOLE_LINK      = "https://us-west-2.console.aws.amazon.com/"
+AWS_USER              = "postman-user"
+AWS_PASSWORD          = "DW@lmKvPEsL5zU8A"
